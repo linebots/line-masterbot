@@ -45,7 +45,7 @@ GType           crane_domain_get_type   (void) G_GNUC_CONST;
 
 CraneDomain*    crane_domain_new        (void);
 
-void            crane_domain_acquire    (CraneDomain * self, GFile * dir, GError ** error);
+void            crane_domain_acquire    (CraneDomain * self, gchar * path, GError ** error);
 void            crane_domain_release    (CraneDomain * self, GError ** error) ;
 
 G_END_DECLS

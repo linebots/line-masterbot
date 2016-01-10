@@ -33,7 +33,7 @@ struct _CraneDomainPrivate
 enum
 {
 	PROP_0,
-	PROP_FILE,
+	PROP_PATH,
 	PROP_IS_ACQUIRED,
 	LAST_PROP
 }
@@ -63,9 +63,9 @@ crane_domain_get_property (GObject    * object,
 	
 	switch (prop_id)
 	{
-	case PROP_FILE:
-		g_value_set_object (value,
-		                    self->_priv->file);
+	case PROP_PATH:
+		g_value_dup_string (value,
+		                    self->_priv->path);
 		break;
 	
 	case PROP_IS_ACQUIRED:
@@ -101,7 +101,6 @@ crane_domain_dispose (GObject * obj)
 	CraneDomain * self = CRANE_DOMAIN (obj);
 	
 	crane_domain_release (self, NULL);
-	g_clear_object (&self->_priv->file);
 	
 	G_OBJECT_CLASS (crane_domain_parent_class)->dispose (obj);
 }
@@ -126,9 +125,9 @@ crane_domain_class_init (CraneDomainClass * klass)
 	object_class->set_property = crane_domain_set_property;
 	
 	properties[PROP_PATH] =
-		g_param_spec_string ("file",
-		                     "File",
-		                     "Filesystem representation of domain",
+		g_param_spec_string ("path",
+		                     "Path",
+		                     "Path to domain",
 		                     NULL,
 		                     G_PARAM_READONLY | G_PARAM_STATIC_STRINGS);
 	properties[PROP_IS_ACQUIRED] =
@@ -187,7 +186,7 @@ crane_domain_init (CraneDomain * obj)
 {
 	obj->_priv = crane_domain_get_instance_private (obj);
 	
-	obj->_priv->file = NULL;
+	obj->_priv->path = NULL;
 	obj->_priv->bundles = NULL;
 	
 	obj->_priv->is_acquired = FALSE;
@@ -204,61 +203,95 @@ crane_domain_is_acquired (CraneDomain * self)
 {
 	g_return_val_if_fail (CRANE_IS_DOMAIN (self), FALSE);
 	
-	return self->_priv->file != NULL;
+	return self->_priv->path != NULL;
 }
 
 void
-crane_domain_acquire (CraneDomain * self, GFile * dir, GError ** error)
+crane_domain_acquire (CraneDomain * self, gchar * path, GError ** error)
 {
 	g_return_if_fail (CRANE_IS_DOMAIN (self));
 	g_return_if_fail (!crane_domain_is_acquired (self));
 	
-	/* Check for native path availability. */
+	char * root_path = g_strdup (path);
 	
-	gchar * path = g_file_get_path (dir);
-	g_return_if_fail (path != NULL);
+	/* Check for availability by PID file. */
 	
-	g_free (path);
+	char * pid_path = g_build_filename (root_path, ".pidfile");
 	
-	/* Check for availability of PID file. */
-	
-	GFile * pid_file = g_file_get_child (dir, ".pidfile");
-	
-	GError * error = NULL;
-	char ** pidcon = NULL;
+	GError * fe = NULL;
+	char ** con = NULL;
 	gsize len = 0;
 	
-	gboolean stat = g_file_load_contents (pid_file,
-	                                      NULL, &pidcon, &len,
-	                                      NULL, &error);
+	gboolean ret = g_file_get_contents (pid_path, &con, &len, &fe);
 	
-	if (stat)
+	if (ret)
 	{
+		/* PID file exists and can be read. */
+		
 		int pid;
-		int cnt = sscanf (pidcon, "%d", &pid);
+		int cnt = sscanf (con, "%d", &pid);
+		
+		g_free (con);
 		
 		if (cnt > 0)
 		{
+			/* PID file is not broken and contain a PID number. */
 			
+			char * proc = g_build_filename ("/proc", itoa (pid));
+			
+			if (g_file_test (proc, G_FILE_TEST_EXISTS))
+			{
+				/* PID is valid. Domain is used by another process. */
+				
+				g_free (pid_path);
+				g_free (root_path);
+				
+				g_error_set_literal (error,
+				                     G_FILE_ERROR,
+				                     G_FILE_ERROR_FAILED,
+				                     "domain has acquired");
+				return;
+			}
+			else
+			{
+				/* PID is invalid. Process using domain maybe killed. */
+			}
 		}
-		
-		// else, malformed pid file, continue.
+		else
+		{
+			/* PID file is malformed. Ignore and continue. */
+		}
 	}
 	else
 	{
-		// if error != (file not found), propragate error!
+		/* Error is occured while reading PID file. */
+		
+		if (fe->code == G_FILE_ERROR_NOENT)
+		{
+			/* PID file is not exist. Domain is free. */
+		}
+		else
+		{
+			/* Another error has caused reading operation failed. */
+			
+			g_free (pid_path);
+			g_free (root_path);
+			
+			g_propagate_error (error, fe);
+			return;
+		}
 	}
+	
+	/* Write PID file to the domain. */
 	
 	// TODO: here!
 	
-	// write pid file, if fail, error.
 	// check directory structure, if malformed, error.
 	// read apps list.
 	
-	g_object_ref (G_OBJECT (dir));
-	self->_priv->file = dir;
+	self->_priv->path = root_path;
 	
-	g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_FILE]);
+	g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_PATH]);
 	g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_IS_ACQUIRED]);
 }
 
@@ -274,7 +307,7 @@ crane_domain_release (CraneDomain * self, GError ** error)
 	// remove pid file, if fail, error.
 	// update properties.
 	
-	g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_FILE]);
+	g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_PATH]);
 	g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_IS_ACQUIRED]);
 }
 

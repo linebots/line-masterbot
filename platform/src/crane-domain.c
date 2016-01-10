@@ -243,14 +243,14 @@ crane_domain_acquire (CraneDomain * self, gchar * path, GError ** error)
 	
 	/* Check for availability by PID file. */
 	
-	char * pid_path = g_build_filename (root_path, ".pidlock");
+	char * path_pid = g_build_filename (root_path, ".pidlock");
 	
 	errno = 0;
 	
-	int fd = open (pid_path, O_WRONLY | O_CREAT | O_SYNC, 0644);
+	int fd = open (path_pid, O_WRONLY | O_CREAT | O_SYNC, 0644);
 	err_code = errno;
 	
-	g_clear_pointer (&pid_path, g_free);
+	g_clear_pointer (&path_pid, g_free);
 	
 	if (fd == -1)
 	{
@@ -323,14 +323,14 @@ crane_domain_acquire (CraneDomain * self, gchar * path, GError ** error)
 	
 	/* Generate apps list kept inside the bundle. */
 	
-	char * app_path = g_build_filename (root_path, "app");
+	char * path_app = g_build_filename (root_path, "app");
 	
 	g_err = NULL;
-	GDir * dir_apps = g_dir_open (app_path, 0, &g_err);
+	GDir * dir_app = g_dir_open (path_app, 0, &g_err);
 	
-	g_clear_pointer (&app_path, g_free);
+	g_clear_pointer (&path_app, g_free);
 	
-	if (dir_apps == NULL)
+	if (dir_app == NULL)
 	{
 		/* Error is occured while opening apps directory. */
 		
@@ -343,7 +343,7 @@ crane_domain_acquire (CraneDomain * self, gchar * path, GError ** error)
 	
 	errno = 0;
 	
-	while ((const gchar * en_raw = g_dir_read_name (dir_apps)) != NULL)
+	while ((const gchar * en_raw = g_dir_read_name (dir_app)) != NULL)
 	{
 		gchar * en = g_strdup (en_raw);
 		
@@ -354,7 +354,7 @@ crane_domain_acquire (CraneDomain * self, gchar * path, GError ** error)
 			// en will be freed by hash table remove hook.
 			
 			g_hash_table_remove_all (self->_priv->bundles);
-			g_dir_close (dir_apps);
+			g_dir_close (dir_app);
 			close (fd);
 			g_free (root_path);
 			
@@ -377,7 +377,7 @@ crane_domain_acquire (CraneDomain * self, gchar * path, GError ** error)
 			/* Unable to process a bundle. Domain is broken! */
 			
 			g_hash_table_remove_all (self->_priv->bundles);
-			g_dir_close (dir_apps);
+			g_dir_close (dir_app);
 			close (fd);
 			g_free (root_path);
 			
@@ -391,7 +391,7 @@ crane_domain_acquire (CraneDomain * self, gchar * path, GError ** error)
 		/* An error has occured while enumerating directory. */
 		
 		g_hash_table_remove_all (self->_priv->bundles);
-		g_dir_close (dir_apps);
+		g_dir_close (dir_app);
 		close (fd);
 		g_free (root_path);
 		
@@ -403,7 +403,7 @@ crane_domain_acquire (CraneDomain * self, gchar * path, GError ** error)
 		return;
 	}
 	
-	g_clear_pointer (&dir_apps, g_dir_close);
+	g_clear_pointer (&dir_app, g_dir_close);
 	
 	self->_priv->pid_fd = fd;
 	self->_priv->path = root_path;

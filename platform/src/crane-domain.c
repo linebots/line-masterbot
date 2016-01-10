@@ -198,6 +198,14 @@ crane_domain_new (void)
 	return g_object_new (CRANE_TYPE_DOMAIN, NULL);
 }
 
+gchar *
+crane_domain_get_path (CraneDomain * self)
+{
+	g_return_val_if_fail (CRANE_IS_DOMAIN (self), FALSE);
+	
+	return g_strdup (self->_priv->path);
+}
+
 gboolean
 crane_domain_is_acquired (CraneDomain * self)
 {

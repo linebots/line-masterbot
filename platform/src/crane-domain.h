@@ -40,10 +40,12 @@ struct _CraneDomainClass
 	void	(* bundle_stopped)      (CraneDomain * domain,
 	                                 CraneBundle * bundle);
 };
-                                                     
 GType           crane_domain_get_type   (void) G_GNUC_CONST;
 
 CraneDomain*    crane_domain_new        (void);
+
+gchar *         crane_domain_get_path   (CraneDomain * self);
+gboolean        crane_domain_is_acquired (CraneDomain * self);
 
 void            crane_domain_acquire    (CraneDomain * self, gchar * path, GError ** error);
 void            crane_domain_release    (CraneDomain * self, GError ** error) ;

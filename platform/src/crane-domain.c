@@ -277,11 +277,11 @@ crane_domain_acquire (CraneDomain * self, gchar * path, GError ** error)
 				g_free (pid_path);
 				g_free (root_path);
 				
-				g_error_set_literal (error,
-				                     G_FILE_ERROR,
-				                     g_file_error_from_errno (err_scan),
-				                     "Unable to read PID file: %s",
-				                     strerror (err_scan));
+				g_error_set (error,
+				             G_FILE_ERROR,
+				             g_file_error_from_errno (err_scan),
+				             "Unable to read PID file: %s",
+				             strerror (err_scan));
 				return;
 			}
 			else

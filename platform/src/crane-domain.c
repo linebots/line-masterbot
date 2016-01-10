@@ -398,16 +398,21 @@ crane_domain_acquire (CraneDomain * self, gchar * path, GError ** error)
 }
 
 void
-crane_domain_release (CraneDomain * self, GError ** error)
+crane_domain_release (CraneDomain * self)
 {
 	g_return_if_fail (CRANE_IS_DOMAIN (self));
+	g_return_if_fail (crane_domain_is_acquired (self));
 	
-	// TODO: here!
-	// if not acquired, just return without error.
-	// send "disposing" signal, every bundle-tools should clean-up, then stop.
-	// unref every bundle-tools registered to this domain.
-	// remove pid file, if fail, error.
-	// update properties.
+	// TODO: generate releasing signal!
+	
+	/* Release all bundles from bundle-tools. */
+	
+	g_hash_table_remove_all (self->_priv->bundles);
+	
+	close (fd);
+	
+	self->_priv->pid_fd = -1;
+	g_clear_pointer (&self->_priv->path, g_free);
 	
 	g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_PATH]);
 	g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_IS_ACQUIRED]);

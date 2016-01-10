@@ -218,6 +218,8 @@ crane_domain_acquire (CraneDomain * self, gchar * path, GError ** error)
 	
 	char * pid_path = g_build_filename (root_path, ".pidfile");
 	
+	errno = 0;
+	
 	FILE * pid_h_r = fopen (pid_path, "r");
 	int err_open_r = errno;
 	
@@ -282,7 +284,7 @@ crane_domain_acquire (CraneDomain * self, gchar * path, GError ** error)
 	}
 	else
 	{
-		/* Error is occured while reading PID file. */
+		/* Error is occured while opening PID file for reading. */
 		
 		if (err_open_r == ENOENT)
 		{
@@ -305,6 +307,67 @@ crane_domain_acquire (CraneDomain * self, gchar * path, GError ** error)
 	}
 	
 	/* Write PID file to the domain. */
+	
+	errno = 0;
+	
+	FILE * pid_h_w = fopen (pid_path, "w");
+	int err_open_w = errno;
+	
+	g_free (pid_path);
+	
+	if (pid_h_r != NULL)
+	{
+		/* PID file can be opened for writing. */
+		
+		int ret_print = fprintf (pid_h_w, "%d\n", getpid ());
+		int err_print = errno;
+		
+		if (ret_print < 0)
+		{
+			/* An error has caused writing operation failed. */
+			
+			g_free (root_path);
+			
+			g_error_set (error,
+			             G_FILE_ERROR,
+			             g_file_error_from_errno (err_print),
+			             "Unable to write PID file: %s",
+			             strerror (err_print));
+			return;
+		}
+		
+		int ret_flush = fflush (pid_h_w);
+		int err_flush = errno;
+		
+		if (ret_flush != 0)
+		{
+			/* An error has caused flushing operation failed. */
+			
+			g_free (root_path);
+			
+			g_error_set (error,
+			             G_FILE_ERROR,
+			             g_file_error_from_errno (err_flush),
+			             "Unable to flush PID file: %s",
+			             strerror (err_flush));
+			return;
+		}
+		
+		fclose (pid_h_w);
+	}
+	else
+	{
+		/* Error is occured while opening PID file for writing. */
+		
+		g_free (root_path);
+		
+		g_error_set (error,
+		             G_FILE_ERROR,
+		             g_file_error_from_errno (err_open_w),
+		             "Unable to open PID file for writing: %s",
+		             strerror (err_open_w));
+		return;
+	}
 	
 	// TODO: here!
 	

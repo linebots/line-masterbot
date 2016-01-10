@@ -247,7 +247,7 @@ crane_domain_acquire (CraneDomain * self, gchar * path, GError ** error)
 	
 	errno = 0;
 	
-	int fd = open (pid_path, O_WRONLY | O_CREAT | O_SYNC);
+	int fd = open (pid_path, O_WRONLY | O_CREAT | O_SYNC, 0644);
 	err_code = errno;
 	
 	g_clear_pointer (&pid_path, g_free);
@@ -285,6 +285,23 @@ crane_domain_acquire (CraneDomain * self, gchar * path, GError ** error)
 	}
 	
 	/* Write PID file to the domain. */
+	
+	ret = ftruncate (fd, 0);
+	err_code = errno;
+	
+	if (ret == -1)
+	{
+		/* Unable to truncate PID file. */
+		
+		close (fd);
+		g_free (root_path);
+		
+		g_error_set (error,
+		             G_FILE_ERROR,
+		             g_file_error_from_errno (err_code),
+		             "Unable to truncate pid-file: %s",
+		             strerror (err_code));
+	}
 	
 	ret = dprintf (fd, "%d\n", getpid ());
 	err_code = errno;

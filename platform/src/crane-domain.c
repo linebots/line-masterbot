@@ -383,10 +383,55 @@ crane_domain_acquire (CraneDomain * self, gchar * path, GError ** error)
 		return;
 	}
 	
-	// TODO: here!
+	/* Generate apps list kept inside the bundle. */
 	
-	// check directory structure, if malformed, error.
-	// read apps list.
+	char * app_path = g_build_filename (root_path, "app");
+	
+	GError * ge_dir = NULL;
+	GDir * dir_apps = g_dir_open (app_path, 0, &ge_dir);
+	
+	g_clear_pointer (&app_path, g_free);
+	
+	if (dir_apps == NULL)
+	{
+		/* Error is occured while opening apps directory. */
+		
+		g_free (root_path);
+		
+		g_propagate_error (error, ge_dir);
+		return;
+	}
+	
+	errno = 0;
+	
+	while ((const gchar * ent = g_dir_read_name (dir_apps)) != NULL)
+	{
+		if (!g_hash_table_insert (self->_priv->bundles, ent, NULL))
+		{
+			/* Key already exist. Duplicate bundle-id detected! */
+			
+			g_dir_close (dir_apps);
+			
+			// TODO: unlink PID file.
+			
+			g_free (root_path);
+			g_hash_table_remove_all (self->_priv->bundles);
+			
+			g_error_set_literal (error,
+			                     G_FILE_ERROR,
+			                     G_FILE_ERROR_FAILED,
+			                     "Domain is broken: Encountered duplicate bundle-id");
+			return;
+		}
+		
+		CraneBundle * tool = crane_bundle_new ();
+		
+		crane_bundle_handle (tool, self, ent);
+		g_object_unref (G_OBJECT (tool));
+	}
+	
+	g_dir_close (dir_apps);
+	dir_apps = NULL;
 	
 	self->_priv->path = root_path;
 	

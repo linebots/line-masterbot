@@ -256,14 +256,12 @@ crane_domain_acquire (CraneDomain * self, gchar * path, GError ** error)
 	{
 		/* An error has caused the operation to be failed. */
 		
-		g_free (root_path);
-		
 		g_error_set (error,
 		             G_FILE_ERROR,
 		             g_file_error_from_errno (err_code),
 		             "Unable to open pid-file: %s",
 		             strerror (err_code));
-		return;
+		goto error_1;
 	}
 	
 	ret = flock (fd, LOCK_EX | LOCK_NB);
@@ -273,15 +271,12 @@ crane_domain_acquire (CraneDomain * self, gchar * path, GError ** error)
 	{
 		/* Unable to lock. Domain maybe used by another process. */
 		
-		close (fd);
-		g_free (root_path);
-		
 		g_error_set (error,
 		             G_FILE_ERROR,
 		             g_file_error_from_errno (err_code),
 		             "Unable to lock pid-file: %s",
 		             strerror (err_code));
-		return;
+		goto error_2;
 	}
 	
 	/* Write PID file to the domain. */
@@ -293,14 +288,12 @@ crane_domain_acquire (CraneDomain * self, gchar * path, GError ** error)
 	{
 		/* Unable to truncate PID file. */
 		
-		close (fd);
-		g_free (root_path);
-		
 		g_error_set (error,
 		             G_FILE_ERROR,
 		             g_file_error_from_errno (err_code),
 		             "Unable to truncate pid-file: %s",
 		             strerror (err_code));
+		goto error_2;
 	}
 	
 	ret = dprintf (fd, "%d\n", getpid ());
@@ -310,15 +303,12 @@ crane_domain_acquire (CraneDomain * self, gchar * path, GError ** error)
 	{
 		/* Unable to write current PID to PID file. */
 		
-		close (fd);
-		g_free (root_path);
-		
 		g_error_set (error,
 		             G_FILE_ERROR,
 		             g_file_error_from_errno (err_code),
 		             "Unable to write pid-file: %s",
 		             strerror (err_code));
-		return;
+		goto error_2;
 	}
 	
 	/* Generate apps list kept inside the bundle. */
@@ -334,11 +324,8 @@ crane_domain_acquire (CraneDomain * self, gchar * path, GError ** error)
 	{
 		/* Error is occured while opening apps directory. */
 		
-		close (fd);
-		g_free (root_path);
-		
 		g_propagate_error (error, g_err);
-		return;
+		goto error_2;
 	}
 	
 	errno = 0;
@@ -350,19 +337,13 @@ crane_domain_acquire (CraneDomain * self, gchar * path, GError ** error)
 		if (!g_hash_table_insert (self->_priv->bundles, en, NULL))
 		{
 			/* Key already exist. Duplicate bundle-id detected! */
-			
-			// en will be freed by hash table remove hook.
-			
-			g_hash_table_remove_all (self->_priv->bundles);
-			g_dir_close (dir_app);
-			close (fd);
-			g_free (root_path);
+			/* NOTE: 'en' is freed by GHashTable's remove-hook. */
 			
 			g_error_set_literal (error,
 			                     G_FILE_ERROR,
 			                     G_FILE_ERROR_FAILED,
 			                     "Domain is broken: Encountered duplicate bundle-id");
-			return;
+			goto error_3;
 		}
 		
 		CraneBundle * tool = crane_bundle_new ();
@@ -376,13 +357,8 @@ crane_domain_acquire (CraneDomain * self, gchar * path, GError ** error)
 		{
 			/* Unable to process a bundle. Domain is broken! */
 			
-			g_hash_table_remove_all (self->_priv->bundles);
-			g_dir_close (dir_app);
-			close (fd);
-			g_free (root_path);
-			
 			g_propagate_error (error, g_err);
-			return;
+			goto error_3;
 		}
 	}
 	
@@ -390,17 +366,12 @@ crane_domain_acquire (CraneDomain * self, gchar * path, GError ** error)
 	{
 		/* An error has occured while enumerating directory. */
 		
-		g_hash_table_remove_all (self->_priv->bundles);
-		g_dir_close (dir_app);
-		close (fd);
-		g_free (root_path);
-		
 		g_error_set (error,
 		             G_FILE_ERROR,
 		             g_file_error_from_errno (err_code),
 		             "Directory enumeration failure: %s",
 		             strerror (err_code));
-		return;
+		goto error_3;
 	}
 	
 	g_clear_pointer (&dir_app, g_dir_close);
@@ -412,6 +383,16 @@ crane_domain_acquire (CraneDomain * self, gchar * path, GError ** error)
 	g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_IS_ACQUIRED]);
 	
 	// TODO: generate acquired signal!
+	
+	return;
+	
+error_3:
+	g_hash_table_remove_all (self->_priv->bundles);
+	g_dir_close (dir_app);
+error_2:
+	close (fd);
+error_1:
+	g_free (root_path);
 }
 
 void

@@ -7,7 +7,7 @@
 struct _CraneDomainPrivate
 {
 	gchar * path;
-	gboolean is_acquired;
+	int pid_fd;
 	
 	GList * bundles;        // deprecated!
 };
@@ -110,7 +110,8 @@ crane_domain_finalize (GObject * obj)
 {
 	CraneDomain * self = CRANE_DOMAIN (obj);
 	
-	/* free instance resources here */
+	g_clear_pointer (&self->_priv->bundles, g_hash_table_unref);
+	
 	G_OBJECT_CLASS (crane_domain_parent_class)->finalize (obj);
 }
 
@@ -182,14 +183,28 @@ crane_domain_class_init (CraneDomainClass * klass)
 }
 
 static void
+release_bundle_tool (gpointer * bundle)
+{
+	g_return_if_fail (CRANE_IS_BUNDLE (bundle));
+	
+	CraneBundle * bundle = CRANE_BUNDLE (bundle);
+	crane_bundle_release (bundle);
+	
+	g_object_unref (G_OBJECT (bundle));
+}
+
+static void
 crane_domain_init (CraneDomain * obj)
 {
 	obj->_priv = crane_domain_get_instance_private (obj);
 	
 	obj->_priv->path = NULL;
-	obj->_priv->bundles = NULL;
+	obj->_priv->pid_fd = -1;
 	
-	obj->_priv->is_acquired = FALSE;
+	obj->_priv->bundles = g_hash_table_new_full (g_str_hash,
+	                                             g_str_equal,
+	                                             g_free,
+	                                             release_bundle_tool);
 }
 
 CraneDomain *
@@ -211,7 +226,7 @@ crane_domain_is_acquired (CraneDomain * self)
 {
 	g_return_val_if_fail (CRANE_IS_DOMAIN (self), FALSE);
 	
-	return self->_priv->path != NULL;
+	return self->_priv->pid_fd != -1;
 }
 
 void
@@ -222,164 +237,70 @@ crane_domain_acquire (CraneDomain * self, gchar * path, GError ** error)
 	
 	char * root_path = g_strdup (path);
 	
+	int ret;
+	int err_code;
+	GError * g_err;
+	
 	/* Check for availability by PID file. */
 	
-	char * pid_path = g_build_filename (root_path, ".pidfile");
+	char * pid_path = g_build_filename (root_path, ".pidlock");
 	
 	errno = 0;
 	
-	FILE * pid_h_r = fopen (pid_path, "r");
-	int err_open_r = errno;
-	
-	if (pid_h_r != NULL)
-	{
-		/* PID file exists and can be read. */
-		
-		int pid;
-		
-		int cnt = fscanf (pid_h_r, "%d", &pid);
-		int err_scan = errno;
-		
-		if (cnt > 0)
-		{
-			/* PID file is not broken and contain a PID number. */
-			
-			char * proc = g_build_filename ("/proc", itoa (pid));
-			
-			if (g_file_test (proc, G_FILE_TEST_EXISTS))
-			{
-				/* PID is valid. Domain is used by another process. */
-				
-				fclose (pid_h_r);
-				
-				g_free (pid_path);
-				g_free (root_path);
-				
-				g_error_set_literal (error,
-				                     G_FILE_ERROR,
-				                     G_FILE_ERROR_FAILED,
-				                     "Domain has acquired");
-				return;
-			}
-			else
-			{
-				/* PID is invalid. Process using domain maybe killed. */
-			}
-		}
-		else
-		{
-			/* Unable to read PID number from PID file. */
-			
-			if (ferror (pid_h_r))
-			{
-				/* An error has caused reading operation failed. */
-				
-				fclose (pid_h_r);
-				
-				g_free (pid_path);
-				g_free (root_path);
-				
-				g_error_set (error,
-				             G_FILE_ERROR,
-				             g_file_error_from_errno (err_scan),
-				             "Unable to read PID file: %s",
-				             strerror (err_scan));
-				return;
-			}
-			else
-			{
-				/* PID file is malformed. Ignore and continue. */
-			}
-		}
-		
-		fclose (pid_h_r);
-		pid_h_r = NULL;
-	}
-	else
-	{
-		/* Error is occured while opening PID file for reading. */
-		
-		if (err_open_r == ENOENT)
-		{
-			/* PID file is not exist. Domain is free. Continue. */
-		}
-		else
-		{
-			/* Another error has caused reading operation failed. */
-			
-			g_free (pid_path);
-			g_free (root_path);
-			
-			g_error_set (error,
-			             G_FILE_ERROR,
-			             g_file_error_from_errno (err_open_r),
-			             "Unable to open PID file for reading: %s",
-			             strerror (err_open_r));
-			return;
-		}
-	}
-	
-	/* Write PID file to the domain. */
-	
-	errno = 0;
-	
-	FILE * pid_h_w = fopen (pid_path, "w");
-	int err_open_w = errno;
+	int fd = open (pid_path, O_WRONLY | O_CREAT | O_SYNC);
+	err_code = errno;
 	
 	g_clear_pointer (&pid_path, g_free);
 	
-	if (pid_h_w != NULL)
+	if (fd == -1)
 	{
-		/* PID file can be opened for writing. */
-		
-		int ret_print = fprintf (pid_h_w, "%d\n", getpid ());
-		int err_print = errno;
-		
-		if (ret_print < 0)
-		{
-			/* An error has caused writing operation failed. */
-			
-			g_free (root_path);
-			
-			g_error_set (error,
-			             G_FILE_ERROR,
-			             g_file_error_from_errno (err_print),
-			             "Unable to write PID file: %s",
-			             strerror (err_print));
-			return;
-		}
-		
-		int ret_flush = fflush (pid_h_w);
-		int err_flush = errno;
-		
-		if (ret_flush != 0)
-		{
-			/* An error has caused flushing operation failed. */
-			
-			g_free (root_path);
-			
-			g_error_set (error,
-			             G_FILE_ERROR,
-			             g_file_error_from_errno (err_flush),
-			             "Unable to flush PID file: %s",
-			             strerror (err_flush));
-			return;
-		}
-		
-		fclose (pid_h_w);
-		pid_h_w = NULL;
-	}
-	else
-	{
-		/* Error is occured while opening PID file for writing. */
+		/* An error has caused the operation to be failed. */
 		
 		g_free (root_path);
 		
 		g_error_set (error,
 		             G_FILE_ERROR,
-		             g_file_error_from_errno (err_open_w),
-		             "Unable to open PID file for writing: %s",
-		             strerror (err_open_w));
+		             g_file_error_from_errno (err_code),
+		             "Unable to open pid-file: %s",
+		             strerror (err_code));
+		return;
+	}
+	
+	ret = flock (fd, LOCK_EX | LOCK_NB);
+	err_code = errno;
+	
+	if (ret == -1)
+	{
+		/* Unable to lock. Domain maybe used by another process. */
+		
+		close (fd);
+		g_free (root_path);
+		
+		g_error_set (error,
+		             G_FILE_ERROR,
+		             g_file_error_from_errno (err_code),
+		             "Unable to lock pid-file: %s",
+		             strerror (err_code));
+		return;
+	}
+	
+	/* Write PID file to the domain. */
+	
+	ret = dprintf (fd, "%d\n", getpid ());
+	err_code = errno;
+	
+	if (ret < 0)
+	{
+		/* Unable to write current PID to PID file. */
+		
+		close (fd);
+		g_free (root_path);
+		
+		g_error_set (error,
+		             G_FILE_ERROR,
+		             g_file_error_from_errno (err_code),
+		             "Unable to write pid-file: %s",
+		             strerror (err_code));
 		return;
 	}
 	
@@ -387,8 +308,8 @@ crane_domain_acquire (CraneDomain * self, gchar * path, GError ** error)
 	
 	char * app_path = g_build_filename (root_path, "app");
 	
-	GError * ge_dir = NULL;
-	GDir * dir_apps = g_dir_open (app_path, 0, &ge_dir);
+	g_err = NULL;
+	GDir * dir_apps = g_dir_open (app_path, 0, &g_err);
 	
 	g_clear_pointer (&app_path, g_free);
 	
@@ -396,26 +317,29 @@ crane_domain_acquire (CraneDomain * self, gchar * path, GError ** error)
 	{
 		/* Error is occured while opening apps directory. */
 		
+		close (fd);
 		g_free (root_path);
 		
-		g_propagate_error (error, ge_dir);
+		g_propagate_error (error, g_err);
 		return;
 	}
 	
 	errno = 0;
 	
-	while ((const gchar * ent = g_dir_read_name (dir_apps)) != NULL)
+	while ((const gchar * en_raw = g_dir_read_name (dir_apps)) != NULL)
 	{
-		if (!g_hash_table_insert (self->_priv->bundles, ent, NULL))
+		gchar * en = g_strdup (en_raw);
+		
+		if (!g_hash_table_insert (self->_priv->bundles, en, NULL))
 		{
 			/* Key already exist. Duplicate bundle-id detected! */
 			
-			g_dir_close (dir_apps);
+			// en will be freed by hash table remove hook.
 			
-			// TODO: unlink PID file.
-			
-			g_free (root_path);
 			g_hash_table_remove_all (self->_priv->bundles);
+			g_dir_close (dir_apps);
+			close (fd);
+			g_free (root_path);
 			
 			g_error_set_literal (error,
 			                     G_FILE_ERROR,
@@ -426,17 +350,51 @@ crane_domain_acquire (CraneDomain * self, gchar * path, GError ** error)
 		
 		CraneBundle * tool = crane_bundle_new ();
 		
-		crane_bundle_handle (tool, self, ent);
+		g_err = NULL;
+		ret = crane_bundle_acquire (tool, self, en_raw, g_err); 
+		
 		g_object_unref (G_OBJECT (tool));
+		
+		if (!ret)
+		{
+			/* Unable to process a bundle. Domain is broken! */
+			
+			g_hash_table_remove_all (self->_priv->bundles);
+			g_dir_close (dir_apps);
+			close (fd);
+			g_free (root_path);
+			
+			g_propagate_error (error, g_err);
+			return;
+		}
 	}
 	
-	g_dir_close (dir_apps);
-	dir_apps = NULL;
+	if (errno != 0)
+	{
+		/* An error has occured while enumerating directory. */
+		
+		g_hash_table_remove_all (self->_priv->bundles);
+		g_dir_close (dir_apps);
+		close (fd);
+		g_free (root_path);
+		
+		g_error_set (error,
+		             G_FILE_ERROR,
+		             g_file_error_from_errno (err_code),
+		             "Directory enumeration failure: %s",
+		             strerror (err_code));
+		return;
+	}
 	
+	g_clear_pointer (&dir_apps, g_dir_close);
+	
+	self->_priv->pid_fd = fd;
 	self->_priv->path = root_path;
 	
 	g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_PATH]);
 	g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_IS_ACQUIRED]);
+	
+	// TODO: generate acquired signal!
 }
 
 void

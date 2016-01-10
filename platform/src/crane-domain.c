@@ -313,7 +313,7 @@ crane_domain_acquire (CraneDomain * self, gchar * path, GError ** error)
 	FILE * pid_h_w = fopen (pid_path, "w");
 	int err_open_w = errno;
 	
-	g_free (pid_path);
+	g_clear_pointer (&pid_path, g_free);
 	
 	if (pid_h_r != NULL)
 	{

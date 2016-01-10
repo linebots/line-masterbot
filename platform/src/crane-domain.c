@@ -240,8 +240,6 @@ crane_domain_acquire (CraneDomain * self, gchar * path, GError ** error)
 		int cnt = fscanf (pid_h_r, "%d", &pid);
 		int err_scan = errno;
 		
-		fclose (pid_h_r);
-		
 		if (cnt > 0)
 		{
 			/* PID file is not broken and contain a PID number. */
@@ -251,6 +249,8 @@ crane_domain_acquire (CraneDomain * self, gchar * path, GError ** error)
 			if (g_file_test (proc, G_FILE_TEST_EXISTS))
 			{
 				/* PID is valid. Domain is used by another process. */
+				
+				fclose (pid_h_r);
 				
 				g_free (pid_path);
 				g_free (root_path);
@@ -274,6 +274,8 @@ crane_domain_acquire (CraneDomain * self, gchar * path, GError ** error)
 			{
 				/* An error has caused reading operation failed. */
 				
+				fclose (pid_h_r);
+				
 				g_free (pid_path);
 				g_free (root_path);
 				
@@ -289,6 +291,9 @@ crane_domain_acquire (CraneDomain * self, gchar * path, GError ** error)
 				/* PID file is malformed. Ignore and continue. */
 			}
 		}
+		
+		fclose (pid_h_r);
+		pid_h_r = NULL;
 	}
 	else
 	{
@@ -362,6 +367,7 @@ crane_domain_acquire (CraneDomain * self, gchar * path, GError ** error)
 		}
 		
 		fclose (pid_h_w);
+		pid_h_w = NULL;
 	}
 	else
 	{

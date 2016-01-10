@@ -218,20 +218,19 @@ crane_domain_acquire (CraneDomain * self, gchar * path, GError ** error)
 	
 	char * pid_path = g_build_filename (root_path, ".pidfile");
 	
-	GError * fe = NULL;
-	char ** con = NULL;
-	gsize len = 0;
+	FILE * pid_h_r = fopen (pid_path, "r");
+	int err_open_r = errno;
 	
-	gboolean ret = g_file_get_contents (pid_path, &con, &len, &fe);
-	
-	if (ret)
+	if (pid_h_r != NULL)
 	{
 		/* PID file exists and can be read. */
 		
 		int pid;
-		int cnt = sscanf (con, "%d", &pid);
 		
-		g_free (con);
+		int cnt = fscanf (pid_h_r, "%d", &pid);
+		int err_scan = errno;
+		
+		fclose (pid_h_r);
 		
 		if (cnt > 0)
 		{
@@ -249,7 +248,7 @@ crane_domain_acquire (CraneDomain * self, gchar * path, GError ** error)
 				g_error_set_literal (error,
 				                     G_FILE_ERROR,
 				                     G_FILE_ERROR_FAILED,
-				                     "domain has acquired");
+				                     "Domain has acquired");
 				return;
 			}
 			else
@@ -259,16 +258,35 @@ crane_domain_acquire (CraneDomain * self, gchar * path, GError ** error)
 		}
 		else
 		{
-			/* PID file is malformed. Ignore and continue. */
+			/* Unable to read PID number from PID file. */
+			
+			if (ferror (pid_h_r))
+			{
+				/* An error has caused reading operation failed. */
+				
+				g_free (pid_path);
+				g_free (root_path);
+				
+				g_error_set_literal (error,
+				                     G_FILE_ERROR,
+				                     g_file_error_from_errno (err_scan),
+				                     "Unable to read PID file: %s",
+				                     strerror (err_scan));
+				return;
+			}
+			else
+			{
+				/* PID file is malformed. Ignore and continue. */
+			}
 		}
 	}
 	else
 	{
 		/* Error is occured while reading PID file. */
 		
-		if (fe->code == G_FILE_ERROR_NOENT)
+		if (err_open_r == ENOENT)
 		{
-			/* PID file is not exist. Domain is free. */
+			/* PID file is not exist. Domain is free. Continue. */
 		}
 		else
 		{
@@ -277,7 +295,11 @@ crane_domain_acquire (CraneDomain * self, gchar * path, GError ** error)
 			g_free (pid_path);
 			g_free (root_path);
 			
-			g_propagate_error (error, fe);
+			g_error_set (error,
+			             G_FILE_ERROR,
+			             g_file_error_from_errno (err_open_r),
+			             "Unable to open PID file for reading: %s",
+			             strerror (err_open_r));
 			return;
 		}
 	}

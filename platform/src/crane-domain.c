@@ -328,7 +328,7 @@ crane_domain_acquire (CraneDomain * self, gchar * path, GError ** error)
 	
 	g_clear_pointer (&pid_path, g_free);
 	
-	if (pid_h_r != NULL)
+	if (pid_h_w != NULL)
 	{
 		/* PID file can be opened for writing. */
 		

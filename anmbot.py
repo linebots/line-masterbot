@@ -1,9 +1,9 @@
 # anm-bot.py by @nieltg
 
 from common import default
-from line import LineClient
 from datetime import datetime
-import getpass, time, sys, io, socket
+
+import time, sys, io, socket
 
 print ("anmbot.py by @nieltg")
 print ("")
@@ -18,8 +18,9 @@ ANM_RECOVER_DELAY = 300
 ANM_GROUP_NAME    = "[STEI] Angel&Mortal"
 ANM_FWD_KEYWORD   = "anmfwd"
 
+ANM_MSG_HEADER    = "[BOT AnM-fwd]\n"
 ANM_MSG_PROCESS   = "[BOT] Message has been processed."
-ANM_MSG_WELCOME   = "[BOT] Bot is started.\n\nTo forward message anonymously, send me message with '%s' as the header." % ANM_FWD_KEYWORD
+ANM_MSG_WELCOME   = "[BOT] Bot is started.\n\nTo forward the message anonymously, send me a message with '%s' as the header." % ANM_FWD_KEYWORD
 ANM_MSG_EXIT      = "[BOT] See yaa!"
 
 #
@@ -94,7 +95,7 @@ def process_msg (msg):
 	
 	if len (n_msg) == 0:
 		return None
-	return "[BOT] " + n_msg
+	return ANM_MSG_HEADER + n_msg
 
 def listen_evt ():
 	global client, net_error

@@ -29,7 +29,7 @@ class TokenCache (object):
 		tokn_r = cipher.decrypt (tokn_e).lstrip ()
 		
 		if hashlib.md5 (tokn_r).digest () != tokn_h:
-			raise Exception("decryption failed")
+			raise Exception ("decryption failed")
 		
 		factory.authToken = tokn_r
 	

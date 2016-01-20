@@ -4,7 +4,7 @@ from .factory import ClientFactory
 from .cache import TokenCache
 
 
-def _init_factory ():
+def init_factory ():
 	
 	factory = ClientFactory ()
 	cache = TokenCache ()
@@ -20,25 +20,12 @@ def _init_factory ():
 
 def init_client ():
 	
-	factory = _init_factory ()
+	factory = init_factory ()
 	
-	cli_comm = factory.get_command_client ()
+	cli_comm = factory.get_client ()
 	
 	print ("done.")
 	print ("")
 	
 	return cli_comm
-
-
-def init_client_poll ():
-	
-	factory = _init_factory ()
-	
-	cli_comm = factory.get_command_client ()
-	cli_poll = factory.get_poll_client ()
-	
-	print ("done.")
-	print ("")
-	
-	return ( cli_comm, cli_poll )
 

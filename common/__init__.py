@@ -2,10 +2,10 @@
 
 from .cache import TokenCache
 from .factory import ClientFactory
-from .default import init_client, init_client_poll
+from .default import init_client
 
 __all__ = [
 	'ClientFactory', 'TokenCache',
-	'init_client', 'init_client_poll'
+	'init_client'
 ]
 

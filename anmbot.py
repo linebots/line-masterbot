@@ -21,8 +21,6 @@ ANM_FWD_KEYWORD   = "anmfwd"
 ANM_MSG_HEADER    = "[BOT AnM-fwd]\n"
 ANM_MSG_PROCESS   = "[BOT] Message has been processed."
 ANM_MSG_UNABLE    = "[BOT] Unable to process message. Sorry."
-ANM_MSG_WELCOME   = "[BOT] Bot is started.\n\nTo forward the message anonymously, send me a message with '%s' as the header." % ANM_FWD_KEYWORD
-ANM_MSG_EXIT      = "[BOT] See yaa!"
 
 ANM_ACC_BLACKLIST = []
 
@@ -69,16 +67,6 @@ def reconnect (exit=False):
 	
 	if not exit:
 		connect (last_rev)
-
-def msg_welcome ():
-	global group
-	
-	group.sendMessage (ANM_MSG_WELCOME)
-
-def msg_exit ():
-	global group
-	
-	group.sendMessage (ANM_MSG_EXIT)
 
 def network_except (ne):
 	global net_error
@@ -183,8 +171,6 @@ log_write ("AnM-Bot started at %s" % (str (datetime.now ())), mode="init")
 connect ()
 log_write ("init: Connection established.", mode="init")
 
-# msg_welcome ()
-
 while True:
 	
 	try:
@@ -194,7 +180,6 @@ while True:
 	except KeyboardInterrupt as ke:
 		log_write ("init: KeyboardInterrupt is raised!", mode="init")
 		
-		# msg_exit ()
 		reconnect (exit=True)
 		break
 		

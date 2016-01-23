@@ -21,7 +21,7 @@ ANM_RECOVER_DELAY = 300
 ANM_GROUP_NAME    = "[STEI] Angel&Mortal"
 ANM_MODERATOR_IDS = []
 
-ANM_RE_KEYWORD    = '\s*(?i)anm\.(?P<key>\w+)\s*'
+ANM_RE_KEYWORD    = '\s*(?i)anm-(?P<key>\w+)\s*'
 ANM_RE_REGISTER   = '(?P<name>.+)'
 ANM_RE_ENABLE     = '(?P<rowid>\d+)'
 

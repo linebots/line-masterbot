@@ -168,12 +168,12 @@ def db_open ():
 	
 	db_handle = sqlite3.connect (ANM_DATABASE_FILE)
 	db_handle.executescript ('''
-	CREATE TABLE "users" IF NOT EXIST (
+	CREATE TABLE "users" IF NOT EXISTS (
 	  acc_id TEXT UNIQUE NOT NULL,
 	  name TEXT NOT NULL,
 	  mortal_name TEXT NOT NULL,
 	  enable INTEGER DEFAULT 0);
-	CREATE TABLE "msg_log" IF NOT EXIST (
+	CREATE TABLE "msg_log" IF NOT EXISTS (
 	  time DATETIME DEFAULT CURRENT_TIMESTAMP,
 	  acc_id TEXT NOT NULL,
 	  mortal_name TEXT NOT NULL,
@@ -191,7 +191,7 @@ def db_close ():
 def db_user_register (acc_id, name, mortal_name):
 	global db_handle
 	
-	query = "INSERT INTO users (acc_id, name, mortal_name) VALUES (?,?,?)"
+	query = "INSERT OR REPLACE INTO users (acc_id, name, mortal_name) VALUES (?,?,?)"
 	param = (acc_id, name, mortal_name)
 	
 	cursor = db_handle.cursor ()

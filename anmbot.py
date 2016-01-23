@@ -4,6 +4,7 @@ from common import default
 from datetime import datetime
 
 import time, sys, io, socket
+import re
 
 print ("anmbot.py by @nieltg")
 print ("")
@@ -16,7 +17,7 @@ ANM_MAX_NET_ERROR = 3
 ANM_RECOVER_DELAY = 300
 
 ANM_GROUP_NAME    = "[STEI] Angel&Mortal"
-ANM_FWD_KEYWORD   = "anmfwd"
+ANM_KEYWORD_REGEX = '\s*(?i)anm\.(?P<key>\w+)\s*'
 
 ANM_MSG_HEADER    = "[BOT AnM-fwd]\n"
 ANM_MSG_PROCESS   = "[BOT] Message has been processed."
@@ -28,7 +29,7 @@ ANM_ACC_BLACKLIST = []
 # Method definitions.
 
 factory = default.init_factory ()
-keyword_len = len (ANM_FWD_KEYWORD)
+keyword_re = re.compile (ANM_KEYWORD_REGEX)
 
 client = None
 
@@ -76,17 +77,19 @@ def network_except (ne):
 	
 	net_error = net_error - 1
 
+def process_keyword (msg):
+	key = None
+	if msg == None: return None
+	rk = keyword_re.match (msg)
+	if rk <> None:
+		key = rk.group ('key').lower ()
+		msg = msg[rk.end ():]
+	return (key, msg)
+
 def process_msg (msg):
-	if msg == None:
-		return None
-	msg = msg.strip ()
-	if msg[:keyword_len].lower () <> ANM_FWD_KEYWORD:
-		return None
+	key, n_msg = process_keyword (msg)
 	
-	n_msg = msg[keyword_len:].strip ()
-	
-	if len (n_msg) == 0:
-		return None
+	if key <> "fwd": return None
 	return ANM_MSG_HEADER + n_msg
 
 def listen_evt ():

@@ -168,18 +168,16 @@ def db_open ():
 	
 	db_handle = sqlite3.connect (ANM_DATABASE_FILE)
 	db_handle.executescript ('''
-	CREATE TABLE "users" IF NOT EXISTS (
+	CREATE TABLE IF NOT EXISTS "users" (
 	  acc_id TEXT UNIQUE NOT NULL,
 	  name TEXT NOT NULL,
 	  mortal_name TEXT NOT NULL,
 	  enable INTEGER DEFAULT 0);
-	CREATE TABLE "msg_log" IF NOT EXISTS (
+	CREATE TABLE IF NOT EXISTS "msg_log" (
 	  time DATETIME DEFAULT CURRENT_TIMESTAMP,
 	  acc_id TEXT NOT NULL,
 	  mortal_name TEXT NOT NULL,
-	  message TEXT NOT NULL,
-	  FOREIGN KEY (acc_id) REFERENCES users (acc_id) ON UPDATE RESTRICT ON DELETE RESTRICT);
-	PRAGMA foreign_keys = ON;
+	  message TEXT NOT NULL);
 	''')
 
 def db_close ():
@@ -192,7 +190,7 @@ def db_user_register (acc_id, name, mortal_name):
 	global db_handle
 	
 	query = "INSERT OR REPLACE INTO users (acc_id, name, mortal_name) VALUES (?,?,?)"
-	param = (acc_id, name, mortal_name)
+	param = (acc_id, name, mortal_name, )
 	
 	cursor = db_handle.cursor ()
 	cursor.execute (query, param)
@@ -204,29 +202,39 @@ def db_user_enable (rowid, value=True):
 	global db_handle
 	
 	query = "UPDATE users SET enable=? WHERE _ROWID_=?"
-	param = (int (value), rowid)
+	param = (int (value), rowid, )
 	
 	db_handle.execute (query, param)
 	db_handle.commit ()
-
-def db_query_mortal (acc_id):
-	global db_handle
 	
-	query = "SELECT mortal_name FROM users WHERE acc_id=?, enable"
-	param = (acc_id)
+	query = "SELECT acc_id, name, mortal_name FROM users WHERE _ROWID_=?"
+	param = (rowid, )
 	
 	cursor = db_handle.cursor ()
 	cursor.execute (query, param)
 	data = cursor.fetchone ()
 	
 	if data == None: return None
-	return data["mortal_name"]
+	return {'acc_id': data[0], 'name': data[1], 'mortal_name': data[2]}
+
+def db_query_mortal (acc_id):
+	global db_handle
+	
+	query = "SELECT mortal_name FROM users WHERE acc_id=? AND enable"
+	param = (acc_id, )
+	
+	cursor = db_handle.cursor ()
+	cursor.execute (query, param)
+	data = cursor.fetchone ()
+	
+	if data == None: return None
+	return data[0]
 
 def db_log_message (acc_id, mortal_name, msg):
 	global db_handle
 	
 	query = "INSERT INTO msg_log (acc_id, mortal_name, message) VALUES (?,?,?)"
-	param = (acc_id, mortal_name, msg)
+	param = (acc_id, mortal_name, msg, )
 	
 	c = db_handle.cursor ()
 	c.execute (query, param)

@@ -5,6 +5,7 @@ from datetime import datetime
 
 import time, sys, io, socket
 import re
+import sqlite3
 
 print ("anmbot.py by @nieltg")
 print ("")
@@ -13,6 +14,7 @@ print ("")
 # Constants declarations.
 
 ANM_LOG_FILE      = "anm.log"
+ANM_DATABASE_FILE = "anm.db"
 ANM_MAX_NET_ERROR = 3
 ANM_RECOVER_DELAY = 300
 
@@ -39,6 +41,8 @@ group = None
 
 log_handle = None
 log_mode = None
+
+db_handle = None
 
 def connect (last_rev=None):
 	global factory, client, profile, group, net_error
@@ -159,6 +163,75 @@ def log_entry (acc_id, name, msg):
 	n_msg = msg.replace ('\n', ' ')
 	log_write ("%s (%s): %s" % (name, acc_id, n_msg), mode="entry")
 
+def db_open ():
+	global db_handle
+	
+	db_handle = sqlite3.connect (ANM_DATABASE_FILE)
+	db_handle.executescript ('''
+	CREATE TABLE "users" IF NOT EXIST (
+	  acc_id TEXT UNIQUE NOT NULL,
+	  name TEXT NOT NULL,
+	  mortal_name TEXT NOT NULL,
+	  enable INTEGER DEFAULT 0);
+	CREATE TABLE "msg_log" IF NOT EXIST (
+	  time DATETIME DEFAULT CURRENT_TIMESTAMP,
+	  acc_id TEXT NOT NULL,
+	  mortal_name TEXT NOT NULL,
+	  message TEXT NOT NULL,
+	  FOREIGN KEY (acc_id) REFERENCES users (acc_id) ON UPDATE RESTRICT ON DELETE RESTRICT);
+	PRAGMA foreign_keys = ON;
+	''')
+
+def db_close ():
+	global db_handle
+	
+	db_handle.close ()
+	db_handle = None
+
+def db_user_register (acc_id, name, mortal_name):
+	global db_handle
+	
+	query = "INSERT INTO users (acc_id, name, mortal_name) VALUES (?,?,?)"
+	param = (acc_id, name, mortal_name)
+	
+	cursor = db_handle.cursor ()
+	cursor.execute (query, param)
+	db_handle.commit ()
+	
+	return cursor.lastrowid
+
+def db_user_enable (rowid, value=True):
+	global db_handle
+	
+	query = "UPDATE users SET enable=? WHERE _ROWID_=?"
+	param = (int (value), rowid)
+	
+	db_handle.execute (query, param)
+	db_handle.commit ()
+
+def db_query_mortal (acc_id):
+	global db_handle
+	
+	query = "SELECT mortal_name FROM users WHERE acc_id=?, enable"
+	param = (acc_id)
+	
+	cursor = db_handle.cursor ()
+	cursor.execute (query, param)
+	data = cursor.fetchone ()
+	
+	if data == None: return None
+	return data["mortal_name"]
+
+def db_log_message (acc_id, mortal_name, msg):
+	global db_handle
+	
+	query = "INSERT INTO msg_log (acc_id, mortal_name, message) VALUES (?,?,?)"
+	param = (acc_id, mortal_name, msg)
+	
+	c = db_handle.cursor ()
+	c.execute (query, param)
+	db_handle.commit ()
+
 #
 # Operation defintions.
 
@@ -187,6 +260,8 @@ log_write ("AnM-Bot started at %s" % (str (datetime.now ())), mode="init")
 connect ()
 log_write ("init: Connection established.", mode="init")
 
+db_open ()
+
 while True:
 	
 	try:
@@ -205,6 +280,8 @@ while True:
 		
 		time.sleep (ANM_RECOVER_DELAY)
 		reconnect ()
+
+db_close ()
 
 log_write ("AnM-Bot stopped at %s" % str (datetime.now ()), mode="init")
 log_close ()

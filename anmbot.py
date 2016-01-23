@@ -22,10 +22,22 @@ ANM_GROUP_NAME    = "[STEI] Angel&Mortal"
 ANM_MODERATOR_IDS = []
 
 ANM_RE_KEYWORD    = '\s*(?i)anm\.(?P<key>\w+)\s*'
+ANM_RE_REGISTER   = '(?P<name>.+)'
+ANM_RE_ENABLE     = '(?P<rowid>\d+)'
 
 ANM_MSG_INVALID     = "[BOT] Invalid command: %(cmd)s"
 ANM_MSG_BAD_USAGE   = "[BOT] Invalid usage of command."
+ANM_MSG_FAIL        = "[BOT] Unable to process command. Sorry."
 ANM_MSG_NOTICE_PONG = "[BOT] Your account-info has been logged. Thanks!"
+ANM_MSG_REG_USAGE   = "[BOT] Invalid usage of command.\n\nUsage:\nanm.reg MORTAL_NAME"
+ANM_MSG_REG_BC      = "[BOT AnM-Request]\n%(name)s => %(mortal)s's angel.\n\nSend back to confirm:"
+ANM_MSG_REG_BC_CMD  = "anm.enable %(rowid)d"
+ANM_MSG_REG_PONG    = "[BOT] Request sent. Please wait for GM's confirmation."
+ANM_MSG_REG_NO_WAIT = "[BOT] This type of request can only be sent once a day."
+ANM_MSG_ENABLE_BC   = "[BOT] %(moderator)s has assigned %(name)s as %(mortal)s's angel."
+ANM_MSG_ENABLE_PONG = "[BOT] GM has confirmed your request as %(mortal)s's angel. Have a nice day."
+ANM_MSG_FWD_MSG     = "[BOT AnM-fwd]\n%(msg)s\n\n-%(mortal)s's angel"
+ANM_MSG_FWD_PONG    = "[BOT] Message has been processed."
 
 #
 # Method definitions.
@@ -33,6 +45,8 @@ ANM_MSG_NOTICE_PONG = "[BOT] Your account-info has been logged. Thanks!"
 factory = default.init_factory ()
 
 re_keyword = re.compile (ANM_RE_KEYWORD)
+re_register = re.compile (ANM_RE_REGISTER)
+re_enable = re.compile (ANM_RE_ENABLE)
 
 client = None
 
@@ -43,6 +57,9 @@ log_handle = None
 log_mode = None
 
 db_handle = None
+
+reg_queue = None
+reg_queue_dt = None
 
 def connect (last_rev=None):
 	global factory, client, profile, group, net_error
@@ -247,16 +264,90 @@ def op_noticeme (sender, receiver, msg):
 	log_write ("noticeme: %s (%s)" % (sender.name, sender.id), mode="noticeme")
 	sender.sendMessage (ANM_MSG_NOTICE_PONG)
 
+def op_reg (sender, receiver, msg):
+	global client, reg_queue, reg_queue_dt
+	
+	if reg_queue_dt <> datetime.now ().date ():
+		reg_queue = []
+		reg_queue_dt = datetime.now ().date ()
+	if sender.id in reg_queue:
+		sender.sendMessage (ANM_MSG_REG_NO_WAIT)
+		return
+	
+	rk = re_register.match (msg)
+	if rk == None:
+		sender.sendMessage (ANM_MSG_REG_USAGE)
+		return
+	mortal_name = rk.group ('name')
+	
+	rowid = db_user_register (sender.id, sender.name, mortal_name)
+	
+	reg_param = {'name': sender.name, 'mortal': mortal_name, 'rowid': rowid}
+	log_write ("reg-request: %(name)s => %(mortal)s's angel" % reg_param, mode="reg")
+	
+	# Forward request to GMs.
+	
+	for mod_id in ANM_MODERATOR_IDS:
+		mod = client.getContactById (mod_id)
+		mod.sendMessage (ANM_MSG_REG_BC     % reg_param)
+		mod.sendMessage (ANM_MSG_REG_BC_CMD % reg_param)
+	
+	reg_queue.append (sender.id)
+	
+	sender.sendMessage (ANM_MSG_REG_PONG % reg_param)
+
+def op_enable (sender, receiver, msg):
+	global client
+	
+	rk = re_enable.match (msg)
+	if rk == None:
+		sender.sendMessage (ANM_MSG_BAD_USAGE)
+		return
+	rowid = rk.group ('rowid')
+	
+	query = db_user_enable (rowid)
+	if query == None:
+		sender.sendMessage (ANM_MSG_FAIL)
+		return
+	
+	acc_id = query['acc_id']
+	reg_param = {'moderator': sender.name, 'name': query['name'], 'mortal': query['mortal_name']}
+	
+	for mod_id in ANM_MODERATOR_IDS:
+		mod = client.getContactById (mod_id)
+		mod.sendMessage (ANM_MSG_ENABLE_BC % reg_param)
+	
+	# Inform confirmation to requester.
+	
+	usr = client.getContactById (acc_id)
+	usr.sendMessage (ANM_MSG_ENABLE_PONG % reg_param)
+
+def op_fwd (sender, receiver, msg):
+	global group
+	
+	mortal_name = db_query_mortal (sender.id)
+	if mortal_name == None:
+		sender.sendMessage (ANM_MSG_FAIL)
+		return
+	
+	db_log_message (sender.id, mortal_name, msg)
+	
+	group.sendMessage (ANM_MSG_FWD_MSG % {'msg': msg, 'mortal': mortal_name})
+	sender.sendMessage (ANM_MSG_FWD_PONG)
+
 optable_default = {
 	"noticeme" : op_noticeme
 }
 
 optable_user = optable_default.copy ()
 optable_user.update ({
+	"reg"      : op_reg,
+	"fwd"      : op_fwd
 })
 
 optable_priv = optable_default.copy ()
 optable_priv.update ({
+	"enable"   : op_enable
 })
 
 #

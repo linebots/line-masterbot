@@ -1,7 +1,7 @@
 # anm-bot.py by @nieltg
 
 from common import default
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import time, sys, io, socket
 import re
@@ -33,7 +33,8 @@ ANM_MSG_REG_USAGE   = "[BOT] Invalid usage of command.\n\nUsage:\nanm.reg MORTAL
 ANM_MSG_REG_BC      = "[BOT AnM-Request]\n%(name)s => %(mortal)s's angel.\n\nSend back to confirm:"
 ANM_MSG_REG_BC_CMD  = "anm.enable %(rowid)d"
 ANM_MSG_REG_PONG    = "[BOT] Request sent. Please wait for GM's confirmation."
-ANM_MSG_REG_NO_WAIT = "[BOT] This type of request can only be sent once a day."
+ANM_MSG_REG_NO_DONE = "[BOT] You have been registered as %(mortal)s's angel."
+ANM_MSG_REG_NO_WAIT = "[BOT] Please wait for GM's confirmation or register again next hour."
 ANM_MSG_ENABLE_BC   = "[BOT] %(moderator)s has assigned %(name)s as %(mortal)s's angel."
 ANM_MSG_ENABLE_PONG = "[BOT] GM has confirmed your request as %(mortal)s's angel. Have a nice day."
 ANM_MSG_FWD_MSG     = "[BOT AnM-fwd]\n%(msg)s\n\n-%(mortal)s's angel"
@@ -58,8 +59,7 @@ log_mode = None
 
 db_handle = None
 
-reg_queue = None
-reg_queue_dt = None
+reg_queue = {}
 
 def connect (last_rev=None):
 	global factory, client, profile, group, net_error
@@ -265,12 +265,13 @@ def op_noticeme (sender, receiver, msg):
 	sender.sendMessage (ANM_MSG_NOTICE_PONG)
 
 def op_reg (sender, receiver, msg):
-	global client, reg_queue, reg_queue_dt
+	global client, reg_queue
 	
-	if reg_queue_dt <> datetime.now ().date ():
-		reg_queue = []
-		reg_queue_dt = datetime.now ().date ()
-	if sender.id in reg_queue:
+	mortal_name = db_query_mortal (sender.id)
+	if mortal_name <> None:
+		sender.sendMessage (ANM_MSG_REG_NO_DONE % {'mortal': mortal_name})
+		return
+	if (sender.id in reg_queue) and (datetime.now () < reg_queue[sender.id]):
 		sender.sendMessage (ANM_MSG_REG_NO_WAIT)
 		return
 	
@@ -292,7 +293,7 @@ def op_reg (sender, receiver, msg):
 		mod.sendMessage (ANM_MSG_REG_BC     % reg_param)
 		mod.sendMessage (ANM_MSG_REG_BC_CMD % reg_param)
 	
-	reg_queue.append (sender.id)
+	reg_queue[sender.id] = datetime.now () + timedelta (hours=1)
 	
 	sender.sendMessage (ANM_MSG_REG_PONG % reg_param)
 
@@ -321,6 +322,8 @@ def op_enable (sender, receiver, msg):
 	
 	usr = client.getContactById (acc_id)
 	usr.sendMessage (ANM_MSG_ENABLE_PONG % reg_param)
+	
+	del reg_queue[sender.id]
 
 def op_fwd (sender, receiver, msg):
 	global group

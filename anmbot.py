@@ -17,7 +17,8 @@ ANM_MAX_NET_ERROR = 3
 ANM_RECOVER_DELAY = 300
 
 ANM_GROUP_NAME    = "[STEI] Angel&Mortal"
-ANM_KEYWORD_REGEX = '\s*(?i)anm\.(?P<key>\w+)\s*'
+
+ANM_RE_KEYWORD    = '\s*(?i)anm\.(?P<key>\w+)\s*'
 
 ANM_MSG_HEADER    = "[BOT AnM-fwd]\n"
 ANM_MSG_PROCESS   = "[BOT] Message has been processed."
@@ -29,7 +30,8 @@ ANM_ACC_BLACKLIST = []
 # Method definitions.
 
 factory = default.init_factory ()
-keyword_re = re.compile (ANM_KEYWORD_REGEX)
+
+re_keyword = re.compile (ANM_RE_KEYWORD)
 
 client = None
 
@@ -80,7 +82,7 @@ def network_except (ne):
 def process_keyword (msg):
 	key = None
 	if msg == None: return None
-	rk = keyword_re.match (msg)
+	rk = re_keyword.match (msg)
 	if rk <> None:
 		key = rk.group ('key').lower ()
 		msg = msg[rk.end ():]

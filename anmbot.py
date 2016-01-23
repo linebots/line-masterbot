@@ -20,8 +20,11 @@ ANM_FWD_KEYWORD   = "anmfwd"
 
 ANM_MSG_HEADER    = "[BOT AnM-fwd]\n"
 ANM_MSG_PROCESS   = "[BOT] Message has been processed."
+ANM_MSG_UNABLE    = "[BOT] Unable to process message. Sorry."
 ANM_MSG_WELCOME   = "[BOT] Bot is started.\n\nTo forward the message anonymously, send me a message with '%s' as the header." % ANM_FWD_KEYWORD
 ANM_MSG_EXIT      = "[BOT] See yaa!"
+
+ANM_ACC_BLACKLIST = []
 
 #
 # Method definitions.
@@ -88,7 +91,8 @@ def network_except (ne):
 def process_msg (msg):
 	if msg == None:
 		return None
-	elif msg[:keyword_len].lower () <> ANM_FWD_KEYWORD:
+	msg = msg.strip ()
+	if msg[:keyword_len].lower () <> ANM_FWD_KEYWORD:
 		return None
 	
 	n_msg = msg[keyword_len:].strip ()
@@ -111,8 +115,6 @@ def listen_evt ():
 		
 	except socket.gaierror as ne:
 		network_except (ne)
-	
-	raise Exception ("client.longPoll2 () returns None")
 
 def handle_evt (op_list):
 	global profile, group
@@ -122,11 +124,19 @@ def handle_evt (op_list):
 		receiver = op[1]
 		message  = op[2]
 		
+		# Bugfix: disable 'Letter Sealing' so message can be read!
+		
 		if receiver.id == profile.id:
 			msg = process_msg (message.text)
 			
 			if msg <> None:
 				try:
+					if sender.id in ANM_ACC_BLACKLIST:
+						log_entry (sender.id, sender.name, "[BLACKLIST]")
+						
+						sender.sendMessage (ANM_MSG_UNABLE)
+						return
+					
 					log_entry (sender.id, sender.name, msg)
 					
 					group.sendMessage (msg)
@@ -173,7 +183,7 @@ log_write ("AnM-Bot started at %s" % (str (datetime.now ())), mode="init")
 connect ()
 log_write ("init: Connection established.", mode="init")
 
-msg_welcome ()
+# msg_welcome ()
 
 while True:
 	
@@ -184,8 +194,9 @@ while True:
 	except KeyboardInterrupt as ke:
 		log_write ("init: KeyboardInterrupt is raised!", mode="init")
 		
-		msg_exit ()
+		# msg_exit ()
 		reconnect (exit=True)
+		break
 		
 	except:
 		log_write ("except: %s" % (str (sys.exc_info()[0])), mode="except")

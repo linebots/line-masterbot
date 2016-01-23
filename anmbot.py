@@ -17,14 +17,13 @@ ANM_MAX_NET_ERROR = 3
 ANM_RECOVER_DELAY = 300
 
 ANM_GROUP_NAME    = "[STEI] Angel&Mortal"
+ANM_MODERATOR_IDS = []
 
 ANM_RE_KEYWORD    = '\s*(?i)anm\.(?P<key>\w+)\s*'
 
-ANM_MSG_HEADER    = "[BOT AnM-fwd]\n"
-ANM_MSG_PROCESS   = "[BOT] Message has been processed."
-ANM_MSG_UNABLE    = "[BOT] Unable to process message. Sorry."
-
-ANM_ACC_BLACKLIST = []
+ANM_MSG_INVALID     = "[BOT] Invalid command: %(cmd)s"
+ANM_MSG_BAD_USAGE   = "[BOT] Invalid usage of command."
+ANM_MSG_NOTICE_PONG = "[BOT] Your account-info has been logged. Thanks!"
 
 #
 # Method definitions.
@@ -88,12 +87,6 @@ def process_keyword (msg):
 		msg = msg[rk.end ():]
 	return (key, msg)
 
-def process_msg (msg):
-	key, n_msg = process_keyword (msg)
-	
-	if key <> "fwd": return None
-	return ANM_MSG_HEADER + n_msg
-
 def listen_evt ():
 	global client, net_error
 	
@@ -120,20 +113,19 @@ def handle_evt (op_list):
 		# Bugfix: disable 'Letter Sealing' so message can be read!
 		
 		if receiver.id == profile.id:
-			msg = process_msg (message.text)
+			key, msg = process_keyword (message.text)
 			
-			if msg <> None:
+			if key <> None:
+				optable = optable_user
+				
+				if sender.id in ANM_MODERATOR_IDS:
+					optable = optable_priv
+				
 				try:
-					if sender.id in ANM_ACC_BLACKLIST:
-						log_entry (sender.id, sender.name, "[BLACKLIST]")
-						
-						sender.sendMessage (ANM_MSG_UNABLE)
-						return
-					
-					log_entry (sender.id, sender.name, msg)
-					
-					group.sendMessage (msg)
-					sender.sendMessage (ANM_MSG_PROCESS)
+					if key in optable:
+						optable[key] (sender, receiver, msg)
+					else:
+						sender.sendMessage (ANM_MSG_INVALID % {'cmd': key})
 					
 				except socket.gaierror as ne:
 					network_except (ne)
@@ -166,6 +158,25 @@ def log_write (msg, mode="custom"):
 def log_entry (acc_id, name, msg):
 	n_msg = msg.replace ('\n', ' ')
 	log_write ("%s (%s): %s" % (name, acc_id, n_msg), mode="entry")
+
+#
+# Operation defintions.
+
+def op_noticeme (sender, receiver, msg):
+	log_write ("noticeme: %s (%s)" % (sender.name, sender.id), mode="noticeme")
+	sender.sendMessage (ANM_MSG_NOTICE_PONG)
+
+optable_default = {
+	"noticeme" : op_noticeme
+}
+
+optable_user = optable_default.copy ()
+optable_user.update ({
+})
+
+optable_priv = optable_default.copy ()
+optable_priv.update ({
+})
 
 #
 # Main application.
